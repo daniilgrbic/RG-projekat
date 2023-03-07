@@ -302,3 +302,9 @@ _deps
 *-prefix/
 
 # End of https://www.toptal.com/developers/gitignore/api/c++,cmake,clion,clion+all,clion+iml,c
+
+# visual studio code
+.vscode/
+
+# build & configuration
+build/

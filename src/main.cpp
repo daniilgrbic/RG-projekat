@@ -14,6 +14,8 @@
 #include <learnopengl/camera.h>
 #include <learnopengl/model.h>
 
+#include <object.hpp>
+
 #include <iostream>
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
@@ -59,8 +61,7 @@ struct ProgramState {
     glm::vec3 backpackPosition = glm::vec3(0.0f);
     float backpackScale = 1.0f;
     PointLight pointLight;
-    ProgramState()
-            : camera(glm::vec3(0.0f, 0.0f, 3.0f)) {}
+    ProgramState() : camera(glm::vec3(0.0f, 8.0f, -8.0f)) {}
 
     void SaveToFile(std::string filename);
 
@@ -137,10 +138,10 @@ int main() {
     }
 
     // tell stb_image.h to flip loaded texture's on the y-axis (before loading model).
-    stbi_set_flip_vertically_on_load(true);
+    //stbi_set_flip_vertically_on_load(true);
 
     programState = new ProgramState;
-    programState->LoadFromFile("resources/program_state.txt");
+    //programState->LoadFromFile("resources/program_state.txt");
     if (programState->ImGuiEnabled) {
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
@@ -165,20 +166,41 @@ int main() {
 
     // load models
     // -----------
-    Model ourModel("resources/objects/backpack/backpack.obj");
-    ourModel.SetShaderTextureNamePrefix("material.");
+
+    Object board;
+    board.setModel(new Model("resources/objects/stone_board/model.obj"));
+    board.setScale(glm::vec3(0.183));
+    board.setShader(&ourShader);
+    board.setRotation(glm::rotate(glm::mat4(1), glm::radians(-90.0f), glm::vec3(1,0,0)));
+
+    std::map<string, Object*> pieces;
+    std::vector<string> piece_names = {
+            "pawn_white", "rook_white", "knight_white", "bishop_white", "king_white", "queen_white",
+            "pawn_black", "rook_black", "knight_black", "bishop_black", "king_black", "queen_black"
+    };
+
+    for(const auto& name : piece_names) {
+        auto* piece = new Object();
+        piece->setModel(new Model("resources/objects/stone_chess/"+name+"/model.obj"));
+        piece->setShader(&ourShader);
+        piece->setScale(glm::vec3(0.183));
+        piece->setRotation(glm::rotate(glm::mat4(1), glm::radians(-90.0f), glm::vec3(1,0,0)));
+        pieces[name] = piece;
+    }
+
+//    Object cube;
+//    cube.setModel(new Model("resources/objects/cube.obj"));
+//    cube.setShader(&ourShader);
 
     PointLight& pointLight = programState->pointLight;
     pointLight.position = glm::vec3(4.0f, 4.0, 0.0);
-    pointLight.ambient = glm::vec3(0.1, 0.1, 0.1);
-    pointLight.diffuse = glm::vec3(0.6, 0.6, 0.6);
-    pointLight.specular = glm::vec3(1.0, 1.0, 1.0);
+    pointLight.ambient = glm::vec3(1.0);
+    pointLight.diffuse = glm::vec3(1.0);
+    pointLight.specular = glm::vec3(0.2);
 
     pointLight.constant = 1.0f;
     pointLight.linear = 0.09f;
     pointLight.quadratic = 0.032f;
-
-
 
     // draw in wireframe
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -227,12 +249,15 @@ int main() {
                                programState->backpackPosition); // translate it down so it's at the center of the scene
         model = glm::scale(model, glm::vec3(programState->backpackScale));    // it's a bit too big for our scene, so scale it down
         ourShader.setMat4("model", model);
-        ourModel.Draw(ourShader);
+
+        board.render();
+        for(auto piece : pieces) {
+            piece.second->render();
+        }
+//        cube.render();
 
         if (programState->ImGuiEnabled)
             DrawImGui(programState);
-
-
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
@@ -240,7 +265,7 @@ int main() {
         glfwPollEvents();
     }
 
-    programState->SaveToFile("resources/program_state.txt");
+    //programState->SaveToFile("resources/program_state.txt");
     delete programState;
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
