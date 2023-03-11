@@ -14,9 +14,10 @@
 #include <learnopengl/camera.h>
 #include <learnopengl/model.h>
 
-#include <object.hpp>
+#include <board.hpp>
 
 #include <iostream>
+#include <memory>
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 
@@ -27,6 +28,8 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
 void processInput(GLFWwindow *window);
 
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
+
+void load_stone_chess_models(std::map<string, std::shared_ptr<Model>> &pieceModels);
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -61,7 +64,7 @@ struct ProgramState {
     glm::vec3 backpackPosition = glm::vec3(0.0f);
     float backpackScale = 1.0f;
     PointLight pointLight;
-    ProgramState() : camera(glm::vec3(0.0f, 8.0f, -8.0f)) {}
+    ProgramState() : camera(glm::vec3(0.0f, -10.0f, 10.0f)) {}
 
     void SaveToFile(std::string filename);
 
@@ -109,6 +112,7 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_SAMPLES, 4);
 
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -151,14 +155,13 @@ int main() {
     ImGuiIO &io = ImGui::GetIO();
     (void) io;
 
-
-
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330 core");
 
     // configure global opengl state
     // -----------------------------
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_MULTISAMPLE);
 
     // build and compile shaders
     // -------------------------
@@ -166,37 +169,22 @@ int main() {
 
     // load models
     // -----------
+    std::unique_ptr<Model> board = std::make_unique<Model>("resources/objects/stone_board/model.obj");
 
-    Object board;
-    board.setModel(new Model("resources/objects/stone_board/model.obj"));
-    board.setScale(glm::vec3(0.183));
-    board.setShader(&ourShader);
-    board.setRotation(glm::rotate(glm::mat4(1), glm::radians(-90.0f), glm::vec3(1,0,0)));
+    std::map<string, std::shared_ptr<Model>> pieceModels;
+    load_stone_chess_models(pieceModels);
 
-    std::map<string, Object*> pieces;
-    std::vector<string> piece_names = {
-            "pawn_white", "rook_white", "knight_white", "bishop_white", "king_white", "queen_white",
-            "pawn_black", "rook_black", "knight_black", "bishop_black", "king_black", "queen_black"
-    };
+    std::unique_ptr<Model> cube = std::make_unique<Model>("resources/objects/cube.obj");
 
-    for(const auto& name : piece_names) {
-        auto* piece = new Object();
-        piece->setModel(new Model("resources/objects/stone_chess/"+name+"/model.obj"));
-        piece->setShader(&ourShader);
-        piece->setScale(glm::vec3(0.183));
-        piece->setRotation(glm::rotate(glm::mat4(1), glm::radians(-90.0f), glm::vec3(1,0,0)));
-        pieces[name] = piece;
-    }
-
-//    Object cube;
-//    cube.setModel(new Model("resources/objects/cube.obj"));
-//    cube.setShader(&ourShader);
+    // initialize the game
+    // -------------------
+    Board game = Board();
 
     PointLight& pointLight = programState->pointLight;
     pointLight.position = glm::vec3(4.0f, 4.0, 0.0);
-    pointLight.ambient = glm::vec3(1.0);
-    pointLight.diffuse = glm::vec3(1.0);
-    pointLight.specular = glm::vec3(0.2);
+    pointLight.ambient = glm::vec3(5.0f);
+    pointLight.diffuse = glm::vec3(10.0f);
+    pointLight.specular = glm::vec3(0.2f);
 
     pointLight.constant = 1.0f;
     pointLight.linear = 0.09f;
@@ -226,7 +214,7 @@ int main() {
 
         // don't forget to enable shader before setting uniforms
         ourShader.use();
-        pointLight.position = glm::vec3(4.0 * cos(currentFrame), 4.0f, 4.0 * sin(currentFrame));
+        pointLight.position = glm::vec3(16.0 * cos(currentFrame), 16.0f * sin(currentFrame), 10.0);
         ourShader.setVec3("pointLight.position", pointLight.position);
         ourShader.setVec3("pointLight.ambient", pointLight.ambient);
         ourShader.setVec3("pointLight.diffuse", pointLight.diffuse);
@@ -236,25 +224,41 @@ int main() {
         ourShader.setFloat("pointLight.quadratic", pointLight.quadratic);
         ourShader.setVec3("viewPosition", programState->camera.Position);
         ourShader.setFloat("material.shininess", 32.0f);
-        // view/projection transformations
+
+        // view / projection transformations
         glm::mat4 projection = glm::perspective(glm::radians(programState->camera.Zoom),
                                                 (float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 100.0f);
         glm::mat4 view = programState->camera.GetViewMatrix();
         ourShader.setMat4("projection", projection);
         ourShader.setMat4("view", view);
 
-        // render the loaded model
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model,
-                               programState->backpackPosition); // translate it down so it's at the center of the scene
-        model = glm::scale(model, glm::vec3(programState->backpackScale));    // it's a bit too big for our scene, so scale it down
-        ourShader.setMat4("model", model);
-
-        board.render();
-        for(auto piece : pieces) {
-            piece.second->render();
+        // render the board and pieces
+        {
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.06f));
+            model = glm::scale(model, glm::vec3(0.183f));
+            ourShader.setMat4("model", model);
+            board->Draw(ourShader);
         }
-//        cube.render();
+
+        for(int row = 1; row <= 8; row++) {
+            for(char col = 'a'; col <= 'h'; col++) {
+                string piece = game.get_piece(row, col);
+                if(!piece.empty()) {
+                    glm::mat4 model = glm::mat4(1.0f);
+                    model = glm::translate(model, game.get_position(row, col));
+                    model = glm::scale(model, glm::vec3(0.183f));
+                    ourShader.setMat4("model", model);
+                    pieceModels[piece]->Draw(ourShader);
+                }
+            }
+        }
+
+//        {
+//            glm::mat4 model = glm::mat4(1.0f);
+//            ourShader.setMat4("model", model);
+//            cube->Draw(ourShader);
+//        }
 
         if (programState->ImGuiEnabled)
             DrawImGui(programState);
@@ -369,5 +373,16 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         } else {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         }
+    }
+}
+
+void load_stone_chess_models(std::map<string, std::shared_ptr<Model>> &pieceModels) {
+    string path = "resources/objects/stone_chess/";
+    std::vector<string> piece_names = {
+        "pawn_white", "rook_white", "knight_white", "bishop_white", "king_white", "queen_white",
+        "pawn_black", "rook_black", "knight_black", "bishop_black", "king_black", "queen_black"
+    };
+    for(const auto& name : piece_names) {
+        pieceModels[name] = std::make_shared<Model>(path + name + "/modelf.obj");
     }
 }
