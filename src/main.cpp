@@ -165,7 +165,10 @@ int main() {
 
     // build and compile shaders
     // -------------------------
-    Shader ourShader("resources/shaders/2.model_lighting.vs", "resources/shaders/2.model_lighting.fs");
+    Shader objectShader(
+        "resources/shaders/object.vert",
+        "resources/shaders/object.frag"
+    );
 
     // load models
     // -----------
@@ -182,9 +185,9 @@ int main() {
 
     PointLight& pointLight = programState->pointLight;
     pointLight.position = glm::vec3(4.0f, 4.0, 0.0);
-    pointLight.ambient = glm::vec3(5.0f);
-    pointLight.diffuse = glm::vec3(10.0f);
-    pointLight.specular = glm::vec3(0.2f);
+    pointLight.ambient = glm::vec3(1.0f);
+    pointLight.diffuse = glm::vec3(1.0f);
+    pointLight.specular = glm::vec3(3.0f);
 
     pointLight.constant = 1.0f;
     pointLight.linear = 0.09f;
@@ -213,32 +216,34 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // don't forget to enable shader before setting uniforms
-        ourShader.use();
-        pointLight.position = glm::vec3(16.0 * cos(currentFrame), 16.0f * sin(currentFrame), 10.0);
-        ourShader.setVec3("pointLight.position", pointLight.position);
-        ourShader.setVec3("pointLight.ambient", pointLight.ambient);
-        ourShader.setVec3("pointLight.diffuse", pointLight.diffuse);
-        ourShader.setVec3("pointLight.specular", pointLight.specular);
-        ourShader.setFloat("pointLight.constant", pointLight.constant);
-        ourShader.setFloat("pointLight.linear", pointLight.linear);
-        ourShader.setFloat("pointLight.quadratic", pointLight.quadratic);
-        ourShader.setVec3("viewPosition", programState->camera.Position);
-        ourShader.setFloat("material.shininess", 32.0f);
+        objectShader.use();
+
+        //pointLight.position = glm::vec3(16.0 * cos(currentFrame), 16.0f * sin(currentFrame), 10.0);
+        pointLight.position = glm::vec3(0, 1, 1);
+        objectShader.setVec3( "pointLights[0].position" , pointLight.position);
+        objectShader.setVec3 ("pointLights[0].ambient"  , pointLight.ambient);
+        objectShader.setVec3 ("pointLights[0].diffuse"  , pointLight.diffuse);
+        objectShader.setVec3 ("pointLights[0].specular" , pointLight.specular);
+        objectShader.setFloat("pointLights[0].constant" , pointLight.constant);
+        objectShader.setFloat("pointLights[0].linear"   , pointLight.linear);
+        objectShader.setFloat("pointLights[0].quadratic", pointLight.quadratic);
+        objectShader.setVec3 ("viewPosition"        , programState->camera.Position);
+        objectShader.setFloat("material.shininess"  , 32.0f);
 
         // view / projection transformations
         glm::mat4 projection = glm::perspective(glm::radians(programState->camera.Zoom),
                                                 (float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 100.0f);
         glm::mat4 view = programState->camera.GetViewMatrix();
-        ourShader.setMat4("projection", projection);
-        ourShader.setMat4("view", view);
+        objectShader.setMat4("projection", projection);
+        objectShader.setMat4("view", view);
 
         // render the board and pieces
         {
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.06f));
             model = glm::scale(model, glm::vec3(0.183f));
-            ourShader.setMat4("model", model);
-            board->Draw(ourShader);
+            objectShader.setMat4("model", model);
+            board->Draw(objectShader);
         }
 
         for(int row = 1; row <= 8; row++) {
@@ -248,10 +253,18 @@ int main() {
                     glm::mat4 model = glm::mat4(1.0f);
                     model = glm::translate(model, game.get_position(row, col));
                     model = glm::scale(model, glm::vec3(0.183f));
-                    ourShader.setMat4("model", model);
-                    pieceModels[piece]->Draw(ourShader);
+                    objectShader.setMat4("model", model);
+                    pieceModels[piece]->Draw(objectShader);
                 }
             }
+        }
+
+        {
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, pointLight.position);
+            model = glm::scale(model, glm::vec3(0.1f));
+            objectShader.setMat4("model", model);
+            cube->Draw(objectShader);
         }
 
 //        {
@@ -294,6 +307,10 @@ void processInput(GLFWwindow *window) {
         programState->camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         programState->camera.ProcessKeyboard(RIGHT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        programState->camera.ProcessKeyboard(UP, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+        programState->camera.ProcessKeyboard(DOWN, deltaTime);
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
