@@ -47,7 +47,7 @@ in vec3 Normal;
 in vec3 FragPos;
 
 #define NUM_POINT_LIGHTS 2
-#define NUM_SPOTLIGHTS 1
+#define NUM_SPOTLIGHTS 2
 uniform DirLight dirLight;
 uniform PointLight pointLights[NUM_POINT_LIGHTS];
 uniform SpotLight spotLights[NUM_SPOTLIGHTS];
@@ -56,7 +56,7 @@ uniform Material material;
 uniform vec3 viewPosition;
 
 uniform float far_plane;
-uniform samplerCube depthMaps[NUM_POINT_LIGHTS];
+uniform samplerCube depthMaps[NUM_POINT_LIGHTS+NUM_SPOTLIGHTS];
 
 vec3 globalAmbient = vec3(0.0);
 
@@ -64,25 +64,24 @@ vec3 globalAmbient = vec3(0.0);
 vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir, vec3 FragPos);
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
 vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
-float ShadowCalculation(vec3 fragPos, int light);
+float ShadowCalculation(vec3 fragPos, int depthMapId, vec3 lightPos);
 
 void main()
 {
     vec3 normal = normalize(Normal);
     vec3 viewDir = normalize(viewPosition - FragPos);
-
     vec3 combined = vec3(0.0);
     for(int i = 0; i < NUM_POINT_LIGHTS; i++) {
-        combined += CalcPointLight(pointLights[i], normal, FragPos, viewDir);
+        vec3 color = CalcPointLight(pointLights[i], normal, FragPos, viewDir);
+        float shadow = ShadowCalculation(FragPos, i, pointLights[i].position);
+        combined += (1.0-shadow)*color;
     }
-
-    combined += CalcSpotLight(spotLights[0], normal, FragPos, viewDir);
-
-    vec3 result = globalAmbient;
-    for(int i = 0; i < NUM_POINT_LIGHTS; i++) {
-        result += combined*(1.0-ShadowCalculation(FragPos, i));
+    for(int i = 0; i < NUM_SPOTLIGHTS; i++) {
+        vec3 color = CalcSpotLight(spotLights[i], normal, FragPos, viewDir);
+        float shadow = ShadowCalculation(FragPos, NUM_POINT_LIGHTS+i, spotLights[i].position);
+        combined += (1.0-shadow)*color;
     }
-    FragColor = vec4(result+combined, 1.0);
+    FragColor = vec4(globalAmbient+combined, 1.0);
 }
 
 vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir, vec3 FragPos)
@@ -140,7 +139,6 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     specular *= attenuation;
 
     globalAmbient += ambient;
-
     return (diffuse + specular);
 }
 
@@ -171,12 +169,12 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     return (diffuse + specular);
 }
 
-float ShadowCalculation(vec3 fragPos, int light)
+float ShadowCalculation(vec3 fragPos, int depthMapId, vec3 lightPos)
 {
     // get vector between fragment position and light position
-    vec3 fragToLight = fragPos - pointLights[light].position;
+    vec3 fragToLight = fragPos - lightPos;
     // ise the fragment to light vector to sample from the depth map
-    float closestDepth = texture(depthMaps[light], fragToLight).r;
+    float closestDepth = texture(depthMaps[depthMapId], fragToLight).r;
     // it is currently in linear range between [0,1], let's re-transform it back to original depth value
     closestDepth *= far_plane;
     // now get current linear depth as the length between the fragment and light position

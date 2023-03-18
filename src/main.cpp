@@ -12,6 +12,7 @@
 #include <learnopengl/model.h>
 
 #include <board.hpp>
+#include <lights.hpp>
 
 #include <iostream>
 #include <memory>
@@ -28,7 +29,7 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 
 void loadPieceModels();
 
-void renderScene(Shader shader);
+void renderScene(Shader &shader);
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -42,41 +43,6 @@ bool firstMouse = true;
 // timing
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
-
-struct PointLight {
-    glm::vec3 position;
-
-    glm::vec3 specular;
-    glm::vec3 diffuse;
-    glm::vec3 ambient;
-
-    float constant;
-    float linear;
-    float quadratic;
-};
-
-struct SpotLight {
-    glm::vec3 position;
-    glm::vec3 direction;
-    float cutOff;
-    float outerCutOff;
-
-    float constant;
-    float linear;
-    float quadratic;
-
-    glm::vec3 ambient;
-    glm::vec3 diffuse;
-    glm::vec3 specular;
-};
-
-struct DirLight {
-    glm::vec3 direction;
-
-    glm::vec3 ambient;
-    glm::vec3 diffuse;
-    glm::vec3 specular;
-};
 
 std::map<string, std::shared_ptr<Model>> pieceModels;
 std::unique_ptr<Model> board;
@@ -126,29 +92,15 @@ int main() {
 
     // initialize lights
     // -----------------
-    for(unsigned int i = 0; i < 2; i++) {
-        pointLights.emplace_back();
-        pointLights[i].ambient = glm::vec3(0.1f);
-        pointLights[i].diffuse = glm::vec3(0.6f);
-        pointLights[i].specular = glm::vec3(1.0f);
-        pointLights[i].constant = 1.0f;
-        pointLights[i].linear = 0.09f;
-        pointLights[i].quadratic = 0.032f;
-    }
+    pointLights = vector<PointLight>(2, PointLight());
     pointLights[0].position = glm::vec3(+4.0, +4.0, 3.0);
     pointLights[1].position = glm::vec3(-4.0, +4.0, 2.0);
 
-    spotLights.emplace_back();
-    spotLights[0].position = glm::vec3(0.0, 2.0, 4.0);
-    spotLights[0].direction = normalize(glm::vec3(+0.0, -1.0, -1.0));
-    spotLights[0].ambient = glm::vec3(0.0);
-    spotLights[0].diffuse = glm::vec3(1.0);
-    spotLights[0].specular = glm::vec3(1.0);
-    spotLights[0].constant = 1.0;
-    spotLights[0].linear = 0.09;
-    spotLights[0].quadratic = 0.032;
-    spotLights[0].cutOff = glm::cos(glm::radians(5.5f));
-    spotLights[0].outerCutOff = glm::cos(glm::radians(11.0f));
+    spotLights = vector<SpotLight>(2, SpotLight());
+    spotLights[0].position = glm::vec3(+0.0, +2.0, 4.0);
+    spotLights[0].direction = normalize(glm::vec3(+0.0, -1.3, -1.0));
+    spotLights[1].position = glm::vec3(-8.0, -2.0, 4.0);
+    spotLights[1].direction = normalize(glm::vec3(+2.0, -0.0, -1.0));
 
     // build and compile shaders
     // -------------------------
@@ -165,9 +117,9 @@ int main() {
     // configure depth map FBO
     // -----------------------
     const unsigned int SHADOW_WIDTH = 2048, SHADOW_HEIGHT = 2048;
-    unsigned int depthMapFBOs[pointLights.size()];
-    unsigned int depthCubemaps[pointLights.size()];
-    for(unsigned int i = 0; i < pointLights.size(); i++) {
+    unsigned int depthMapFBOs[pointLights.size()+spotLights.size()];
+    unsigned int depthCubemaps[pointLights.size()+spotLights.size()];
+    for(unsigned int i = 0; i < pointLights.size()+spotLights.size(); i++) {
         glGenFramebuffers(1, depthMapFBOs + i);
         glGenTextures(1, depthCubemaps + i);
         glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemaps[i]);
@@ -239,16 +191,40 @@ int main() {
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
         }
 
+        for(unsigned int i = 0; i < spotLights.size(); i++) {
+            // 0. create depth cube map transformation matrices
+            // ------------------------------------------------
+            shadowTransforms.clear();
+            shadowTransforms.push_back(shadowProj * glm::lookAt(spotLights[i].position, spotLights[i].position + glm::vec3( 1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(spotLights[i].position, spotLights[i].position + glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(spotLights[i].position, spotLights[i].position + glm::vec3( 0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(spotLights[i].position, spotLights[i].position + glm::vec3( 0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(spotLights[i].position, spotLights[i].position + glm::vec3( 0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(spotLights[i].position, spotLights[i].position + glm::vec3( 0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f)));
+
+            // 1. render scene to depth cube map
+            // ---------------------------------
+            glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+            glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBOs[pointLights.size()+i]);
+            glClear(GL_DEPTH_BUFFER_BIT);
+            depthShader.use();
+            for (unsigned int j = 0; j < 6; ++j) {
+                depthShader.setMat4("shadowMatrices[" + std::to_string(j) + "]", shadowTransforms[j]);
+            }
+            depthShader.setFloat("far_plane", far_plane);
+            depthShader.setVec3("lightPos", spotLights[i].position);
+            renderScene(depthShader);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
+
         // 2. render scene as normal
         // -------------------------
         glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         objectShader.use();
-        for(unsigned int i = 0; i < pointLights.size(); i++) {
-            objectShader.setInt(fmt::format("depthMaps[{}]", i), 15+(int)i);
-        }
         objectShader.setFloat("far_plane", far_plane);
-        for(unsigned int i = 0; i < pointLights.size(); i++) {
+        for(unsigned int i = 0; i < pointLights.size()+spotLights.size(); i++) {
+            objectShader.setInt(fmt::format("depthMaps[{}]", i), 15+(int)i);
             glActiveTexture(GL_TEXTURE15+i);
             glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemaps[i]);
         }
@@ -263,16 +239,19 @@ int main() {
             objectShader.setFloat(fmt::format("pointLights[{}].quadratic", i), pointLights[i].quadratic);
         }
 
-        objectShader.setVec3 (fmt::format("spotLights[{}].position"   , 0), spotLights[0].position);
-        objectShader.setVec3 (fmt::format("spotLights[{}].direction"  , 0), spotLights[0].direction);
-        objectShader.setVec3 (fmt::format("spotLights[{}].ambient"    , 0), spotLights[0].ambient);
-        objectShader.setVec3 (fmt::format("spotLights[{}].diffuse"    , 0), spotLights[0].diffuse);
-        objectShader.setVec3 (fmt::format("spotLights[{}].specular"   , 0), spotLights[0].specular);
-        objectShader.setFloat(fmt::format("spotLights[{}].constant"   , 0), spotLights[0].constant);
-        objectShader.setFloat(fmt::format("spotLights[{}].linear"     , 0), spotLights[0].linear);
-        objectShader.setFloat(fmt::format("spotLights[{}].quadratic"  , 0), spotLights[0].quadratic);
-        objectShader.setFloat(fmt::format("spotLights[{}].cutOff"     , 0), spotLights[0].cutOff);
-        objectShader.setFloat(fmt::format("spotLights[{}].outerCutOff", 0), spotLights[0].outerCutOff);
+        for(unsigned int i = 0; i < spotLights.size(); i++) {
+            objectShader.setVec3 (fmt::format("spotLights[{}].position"   , i), spotLights[i].position);
+            objectShader.setVec3 (fmt::format("spotLights[{}].direction"  , i), spotLights[i].direction);
+            objectShader.setVec3 (fmt::format("spotLights[{}].ambient"    , i), spotLights[i].ambient);
+            objectShader.setVec3 (fmt::format("spotLights[{}].diffuse"    , i), spotLights[i].diffuse);
+            objectShader.setVec3 (fmt::format("spotLights[{}].specular"   , i), spotLights[i].specular);
+            objectShader.setFloat(fmt::format("spotLights[{}].constant"   , i), spotLights[i].constant);
+            objectShader.setFloat(fmt::format("spotLights[{}].linear"     , i), spotLights[i].linear);
+            objectShader.setFloat(fmt::format("spotLights[{}].quadratic"  , i), spotLights[i].quadratic);
+            objectShader.setFloat(fmt::format("spotLights[{}].cutOff"     , i), spotLights[i].cutOff);
+            objectShader.setFloat(fmt::format("spotLights[{}].outerCutOff", i), spotLights[i].outerCutOff);
+
+        }
 
         objectShader.setVec3 ("viewPosition"        , camera.Position);
         objectShader.setFloat("material.shininess"  , 32.0f);
@@ -293,7 +272,7 @@ int main() {
     return 0;
 }
 
-void renderScene(Shader shader) {
+void renderScene(Shader &shader) {
     { // render board
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.06f));
