@@ -9,6 +9,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <fmt/core.h>
+
 #include <learnopengl/filesystem.h>
 #include <learnopengl/shader.h>
 #include <learnopengl/camera.h>
@@ -49,13 +51,37 @@ float lastFrame = 0.0f;
 
 struct PointLight {
     glm::vec3 position;
-    glm::vec3 ambient;
-    glm::vec3 diffuse;
+
     glm::vec3 specular;
+    glm::vec3 diffuse;
+    glm::vec3 ambient;
 
     float constant;
     float linear;
     float quadratic;
+};
+
+struct SpotLight {
+    glm::vec3 position;
+    glm::vec3 direction;
+    float cutOff;
+    float outerCutOff;
+
+    float constant;
+    float linear;
+    float quadratic;
+
+    glm::vec3 ambient;
+    glm::vec3 diffuse;
+    glm::vec3 specular;
+};
+
+struct DirLight {
+    glm::vec3 direction;
+
+    glm::vec3 ambient;
+    glm::vec3 diffuse;
+    glm::vec3 specular;
 };
 
 struct ProgramState {
@@ -111,7 +137,9 @@ std::map<string, std::shared_ptr<Model>> pieceModels;
 std::unique_ptr<Model> board;
 std::unique_ptr<Model> cube;
 Board game;
-PointLight pointLight;
+//PointLight pointLight;
+vector <PointLight> pointLights;
+vector <SpotLight> spotLights;
 
 int main() {
     // glfw: initialize and configure
@@ -171,6 +199,30 @@ int main() {
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
 
+    for(unsigned int i = 0; i < 2; i++) {
+        pointLights.emplace_back();
+        pointLights[i].ambient = glm::vec3(0.1f);
+        pointLights[i].diffuse = glm::vec3(0.6f);
+        pointLights[i].specular = glm::vec3(1.0f);
+        pointLights[i].constant = 1.0f;
+        pointLights[i].linear = 0.09f;
+        pointLights[i].quadratic = 0.032f;
+    }
+    pointLights[0].position = glm::vec3(+4.0, +4.0, 3.0);
+    pointLights[1].position = glm::vec3(-4.0, +4.0, 2.0);
+
+    spotLights.emplace_back();
+    spotLights[0].position = glm::vec3(0.0, 2.0, 4.0);
+    spotLights[0].direction = normalize(glm::vec3(+0.0, -1.0, -1.0));
+    spotLights[0].ambient = glm::vec3(0.0);
+    spotLights[0].diffuse = glm::vec3(1.0);
+    spotLights[0].specular = glm::vec3(1.0);
+    spotLights[0].constant = 1.0;
+    spotLights[0].linear = 0.09;
+    spotLights[0].quadratic = 0.032;
+    spotLights[0].cutOff = glm::cos(glm::radians(5.5f));
+    spotLights[0].outerCutOff = glm::cos(glm::radians(11.0f));
+
     // build and compile shaders
     // -------------------------
     Shader objectShader(
@@ -185,26 +237,28 @@ int main() {
 
     // configure depth map FBO
     // -----------------------
-    const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
-    unsigned int depthMapFBO;
-    glGenFramebuffers(1, &depthMapFBO);
-    // create depth cube map texture
-    unsigned int depthCubemap;
-    glGenTextures(1, &depthCubemap);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
-    for (unsigned int i = 0; i < 6; ++i)
-        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-    // attach depth texture as FBO's depth buffer
-    glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthCubemap, 0);
-    glDrawBuffer(GL_NONE);
-    glReadBuffer(GL_NONE);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    const unsigned int SHADOW_WIDTH = 2048, SHADOW_HEIGHT = 2048;
+    unsigned int depthMapFBOs[pointLights.size()];
+    unsigned int depthCubemaps[pointLights.size()];
+    for(unsigned int i = 0; i < pointLights.size(); i++) {
+        glGenFramebuffers(1, depthMapFBOs + i);
+        glGenTextures(1, depthCubemaps + i);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemaps[i]);
+        for (unsigned int j = 0; j < 6; ++j) {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + j, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+        }
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        // attach depth texture as FBO's depth buffer
+        glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBOs[i]);
+        glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthCubemaps[i], 0);
+        glDrawBuffer(GL_NONE);
+        glReadBuffer(GL_NONE);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
 
     // load models
     // -----------
@@ -215,16 +269,6 @@ int main() {
     // initialize the game
     // -------------------
     game = Board();
-
-    pointLight = programState->pointLight;
-    pointLight.position = glm::vec3(4.0f, 4.0, 0.0);
-    pointLight.ambient = glm::vec3(1.0f);
-    pointLight.diffuse = glm::vec3(1.0f);
-    pointLight.specular = glm::vec3(3.0f);
-
-    pointLight.constant = 1.0f;
-    pointLight.linear = 0.09f;
-    pointLight.quadratic = 0.032f;
 
     // draw in wireframe
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -247,51 +291,72 @@ int main() {
         glClearColor(programState->clearColor.r, programState->clearColor.g, programState->clearColor.b, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // 0. create depth cube map transformation matrices
-        // -----------------------------------------------
         float near_plane = 1.0f;
         float far_plane  = 25.0f;
         glm::mat4 shadowProj = glm::perspective(glm::radians(90.0f), (float)SHADOW_WIDTH / (float)SHADOW_HEIGHT, near_plane, far_plane);
         std::vector<glm::mat4> shadowTransforms;
-        shadowTransforms.push_back(shadowProj * glm::lookAt(pointLight.position, pointLight.position + glm::vec3( 1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(pointLight.position, pointLight.position + glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(pointLight.position, pointLight.position + glm::vec3( 0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(pointLight.position, pointLight.position + glm::vec3( 0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(pointLight.position, pointLight.position + glm::vec3( 0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)));
-        shadowTransforms.push_back(shadowProj * glm::lookAt(pointLight.position, pointLight.position + glm::vec3( 0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f)));
 
-        // 1. render scene to depth cube map
-        // --------------------------------
-        glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
-        glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
-        glClear(GL_DEPTH_BUFFER_BIT);
-        depthShader.use();
-        for (unsigned int i = 0; i < 6; ++i)
-            depthShader.setMat4("shadowMatrices[" + std::to_string(i) + "]", shadowTransforms[i]);
-        depthShader.setFloat("far_plane", far_plane);
-        depthShader.setVec3("lightPos", pointLight.position);
-        renderScene(depthShader);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        for(unsigned int i = 0; i < pointLights.size(); i++) {
+            // 0. create depth cube map transformation matrices
+            // -----------------------------------------------
+            shadowTransforms.clear();
+            shadowTransforms.push_back(shadowProj * glm::lookAt(pointLights[i].position, pointLights[i].position + glm::vec3( 1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(pointLights[i].position, pointLights[i].position + glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(pointLights[i].position, pointLights[i].position + glm::vec3( 0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(pointLights[i].position, pointLights[i].position + glm::vec3( 0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(pointLights[i].position, pointLights[i].position + glm::vec3( 0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)));
+            shadowTransforms.push_back(shadowProj * glm::lookAt(pointLights[i].position, pointLights[i].position + glm::vec3( 0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f)));
+
+            // 1. render scene to depth cube map
+            // --------------------------------
+            glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+            glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBOs[i]);
+            glClear(GL_DEPTH_BUFFER_BIT);
+            depthShader.use();
+            for (unsigned int j = 0; j < 6; ++j) {
+                depthShader.setMat4("shadowMatrices[" + std::to_string(j) + "]", shadowTransforms[j]);
+            }
+            depthShader.setFloat("far_plane", far_plane);
+            depthShader.setVec3("lightPos", pointLights[i].position);
+            renderScene(depthShader);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
 
         // 2. render scene as normal
         // -------------------------
         glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         objectShader.use();
-        objectShader.setInt("depthMap", 15);
+        for(unsigned int i = 0; i < pointLights.size(); i++) {
+            objectShader.setInt(fmt::format("depthMaps[{}]", i), 15+(int)i);
+        }
         objectShader.setFloat("far_plane", far_plane);
-        glActiveTexture(GL_TEXTURE15);
-        glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemap);
+        for(unsigned int i = 0; i < pointLights.size(); i++) {
+            glActiveTexture(GL_TEXTURE15+i);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, depthCubemaps[i]);
+        }
 
-        //pointLight.position = glm::vec3(16.0 * cos(currentFrame), 16.0f * sin(currentFrame), 10.0);
-        pointLight.position = glm::vec3(0, 1, 1);
-        objectShader.setVec3( "pointLights[0].position" , pointLight.position);
-        objectShader.setVec3 ("pointLights[0].ambient"  , pointLight.ambient);
-        objectShader.setVec3 ("pointLights[0].diffuse"  , pointLight.diffuse);
-        objectShader.setVec3 ("pointLights[0].specular" , pointLight.specular);
-        objectShader.setFloat("pointLights[0].constant" , pointLight.constant);
-        objectShader.setFloat("pointLights[0].linear"   , pointLight.linear);
-        objectShader.setFloat("pointLights[0].quadratic", pointLight.quadratic);
+        for(unsigned int i = 0; i < pointLights.size(); i++) {
+            objectShader.setVec3 (fmt::format("pointLights[{}].position" , i), pointLights[i].position);
+            objectShader.setVec3 (fmt::format("pointLights[{}].ambient"  , i), pointLights[i].ambient);
+            objectShader.setVec3 (fmt::format("pointLights[{}].diffuse"  , i), pointLights[i].diffuse);
+            objectShader.setVec3 (fmt::format("pointLights[{}].specular" , i), pointLights[i].specular);
+            objectShader.setFloat(fmt::format("pointLights[{}].constant" , i), pointLights[i].constant);
+            objectShader.setFloat(fmt::format("pointLights[{}].linear"   , i), pointLights[i].linear);
+            objectShader.setFloat(fmt::format("pointLights[{}].quadratic", i), pointLights[i].quadratic);
+        }
+
+        objectShader.setVec3 (fmt::format("spotLights[{}].position"   , 0), spotLights[0].position);
+        objectShader.setVec3 (fmt::format("spotLights[{}].direction"  , 0), spotLights[0].direction);
+        objectShader.setVec3 (fmt::format("spotLights[{}].ambient"    , 0), spotLights[0].ambient);
+        objectShader.setVec3 (fmt::format("spotLights[{}].diffuse"    , 0), spotLights[0].diffuse);
+        objectShader.setVec3 (fmt::format("spotLights[{}].specular"   , 0), spotLights[0].specular);
+        objectShader.setFloat(fmt::format("spotLights[{}].constant"   , 0), spotLights[0].constant);
+        objectShader.setFloat(fmt::format("spotLights[{}].linear"     , 0), spotLights[0].linear);
+        objectShader.setFloat(fmt::format("spotLights[{}].quadratic"  , 0), spotLights[0].quadratic);
+        objectShader.setFloat(fmt::format("spotLights[{}].cutOff"     , 0), spotLights[0].cutOff);
+        objectShader.setFloat(fmt::format("spotLights[{}].outerCutOff", 0), spotLights[0].outerCutOff);
+
         objectShader.setVec3 ("viewPosition"        , programState->camera.Position);
         objectShader.setFloat("material.shininess"  , 32.0f);
 
@@ -348,12 +413,24 @@ void renderScene(Shader shader) {
         }
     }
 
-    { // render lights
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, pointLight.position);
-        model = glm::scale(model, glm::vec3(0.1f));
-        shader.setMat4("model", model);
-        cube->Draw(shader);
+    { // render point lights
+        for(auto & pointLight : pointLights) {
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, pointLight.position);
+            model = glm::scale(model, glm::vec3(0.1f));
+            shader.setMat4("model", model);
+            cube->Draw(shader);
+        }
+    }
+
+    { // render spotlights
+        for(auto & spotLight : spotLights) {
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, spotLight.position);
+            model = glm::scale(model, glm::vec3(0.1f));
+            shader.setMat4("model", model);
+            cube->Draw(shader);
+        }
     }
 }
 

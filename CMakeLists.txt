@@ -25,6 +25,7 @@ find_package(ASSIMP REQUIRED)
 
 add_subdirectory(libs/glad)
 add_subdirectory(libs/imgui)
+add_subdirectory(libs/fmt)
 
 add_definitions(${OPENGL_DEFINITIONS})
 
@@ -34,7 +35,7 @@ set_source_files_properties(libs/stb_image.cpp include/stb_image.h
         COMPILE_FLAGS
         "-Wno-shift-negative-value -Wno-implicit-fallthrough")
 
-set(LIBS glfw glad OpenGL::GL X11 Xrandr Xinerama Xi Xxf86vm Xcursor dl pthread freetype ${ASSIMP_LIBRARIES} STB_IMAGE imgui)
+set(LIBS glfw glad OpenGL::GL X11 Xrandr Xinerama Xi Xxf86vm Xcursor dl pthread freetype ${ASSIMP_LIBRARIES} STB_IMAGE imgui fmt::fmt)
 
 
 configure_file(configuration/root_directory.h.in configuration/root_directory.h)
