@@ -32,8 +32,8 @@ void loadPieceModels();
 void renderScene(Shader &shader);
 
 // settings
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
+const unsigned int SCR_WIDTH = 1200;
+const unsigned int SCR_HEIGHT = 800;
 
 // camera
 float lastX = SCR_WIDTH / 2.0f;
@@ -89,18 +89,27 @@ int main() {
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
+    glEnable(GL_CULL_FACE);
+//    glEnable(GL_BLEND);
+
+//    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // initialize lights
     // -----------------
-    pointLights = vector<PointLight>(2, PointLight());
+    pointLights = vector<PointLight>(3, PointLight());
     pointLights[0].position = glm::vec3(+4.0, +4.0, 3.0);
     pointLights[1].position = glm::vec3(-4.0, +4.0, 2.0);
+    pointLights[2].position = glm::vec3(4.0, +0.0, 4.0);
+    pointLights[2].enabled = true;
 
     spotLights = vector<SpotLight>(2, SpotLight());
     spotLights[0].position = glm::vec3(+0.0, +2.0, 4.0);
     spotLights[0].direction = normalize(glm::vec3(+0.0, -1.3, -1.0));
-    spotLights[1].position = glm::vec3(-8.0, -2.0, 4.0);
-    spotLights[1].direction = normalize(glm::vec3(+2.0, -0.0, -1.0));
+    spotLights[0].enabled = true;
+    spotLights[1].position = glm::vec3(-8.0, -4.0, 4.0);
+    spotLights[1].direction = normalize(glm::vec3(+2.0, +2.0, -1.0));
+    spotLights[1].diffuse *= 5.0;
+    spotLights[1].enabled = true;
 
     // build and compile shaders
     // -------------------------
@@ -237,6 +246,7 @@ int main() {
             objectShader.setFloat(fmt::format("pointLights[{}].constant" , i), pointLights[i].constant);
             objectShader.setFloat(fmt::format("pointLights[{}].linear"   , i), pointLights[i].linear);
             objectShader.setFloat(fmt::format("pointLights[{}].quadratic", i), pointLights[i].quadratic);
+            objectShader.setBool (fmt::format("pointLights[{}].enabled"  , i), pointLights[i].enabled);
         }
 
         for(unsigned int i = 0; i < spotLights.size(); i++) {
@@ -250,7 +260,7 @@ int main() {
             objectShader.setFloat(fmt::format("spotLights[{}].quadratic"  , i), spotLights[i].quadratic);
             objectShader.setFloat(fmt::format("spotLights[{}].cutOff"     , i), spotLights[i].cutOff);
             objectShader.setFloat(fmt::format("spotLights[{}].outerCutOff", i), spotLights[i].outerCutOff);
-
+            objectShader.setBool (fmt::format("spotLights[{}].enabled"    , i), spotLights[i].enabled);
         }
 
         objectShader.setVec3 ("viewPosition"        , camera.Position);
@@ -288,6 +298,10 @@ void renderScene(Shader &shader) {
                 if(!piece.empty()) {
                     glm::mat4 model = glm::mat4(1.0f);
                     model = glm::translate(model, game.get_position(row, col));
+                    if(piece == "knight_white")
+                        model = glm::translate(model, glm::vec3(0.0, +0.16, 0.0));
+                    if(piece == "knight_black")
+                        model = glm::translate(model, glm::vec3(0.0, -0.16, 0.0));
                     model = glm::scale(model, glm::vec3(0.183f));
                     shader.setMat4("model", model);
                     pieceModels[piece]->Draw(shader);
@@ -298,6 +312,8 @@ void renderScene(Shader &shader) {
 
     { // render point lights
         for(auto & pointLight : pointLights) {
+            if(!pointLight.enabled)
+                continue;
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, pointLight.position);
             model = glm::scale(model, glm::vec3(0.1f));
@@ -308,6 +324,8 @@ void renderScene(Shader &shader) {
 
     { // render spotlights
         for(auto & spotLight : spotLights) {
+            if(!spotLight.enabled)
+                continue;
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, spotLight.position);
             model = glm::scale(model, glm::vec3(0.1f));

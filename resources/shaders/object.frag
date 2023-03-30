@@ -11,6 +11,8 @@ struct PointLight {
     float constant;
     float linear;
     float quadratic;
+
+    bool enabled;
 };
 
 struct SpotLight {
@@ -26,6 +28,8 @@ struct SpotLight {
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
+
+    bool enabled;
 };
 
 struct DirLight {
@@ -46,7 +50,7 @@ in vec2 TexCoords;
 in vec3 Normal;
 in vec3 FragPos;
 
-#define NUM_POINT_LIGHTS 2
+#define NUM_POINT_LIGHTS 3
 #define NUM_SPOTLIGHTS 2
 uniform DirLight dirLight;
 uniform PointLight pointLights[NUM_POINT_LIGHTS];
@@ -72,11 +76,15 @@ void main()
     vec3 viewDir = normalize(viewPosition - FragPos);
     vec3 combined = vec3(0.0);
     for(int i = 0; i < NUM_POINT_LIGHTS; i++) {
+        if(!pointLights[i].enabled)
+            continue;
         vec3 color = CalcPointLight(pointLights[i], normal, FragPos, viewDir);
         float shadow = ShadowCalculation(FragPos, i, pointLights[i].position);
         combined += (1.0-shadow)*color;
     }
     for(int i = 0; i < NUM_SPOTLIGHTS; i++) {
+        if(!spotLights[i].enabled)
+            continue;
         vec3 color = CalcSpotLight(spotLights[i], normal, FragPos, viewDir);
         float shadow = ShadowCalculation(FragPos, NUM_POINT_LIGHTS+i, spotLights[i].position);
         combined += (1.0-shadow)*color;
@@ -161,7 +169,7 @@ vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     vec3 ambient = light.ambient * vec3(texture(material.diffuse, TexCoords));
     vec3 diffuse = light.diffuse * diff * vec3(texture(material.diffuse, TexCoords));
     vec3 specular = light.specular * spec * vec3(texture(material.specular, TexCoords));
-    ambient *= attenuation * intensity;
+    ambient *= attenuation;
     diffuse *= attenuation * intensity;
     specular *= attenuation * intensity;
 

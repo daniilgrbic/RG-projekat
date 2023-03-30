@@ -3,13 +3,14 @@
 
 #include <glm/glm.hpp>
 
+#include <utility>
 #include <vector>
 #include <string>
 
 class Board {
 public:
     vector <vector<string>> board;
-    glm::vec3 get_position(int row, char col);
+    static glm::vec3 get_position(int row, char col);
     string get_piece(int row, char col);
     void set_piece(int row, char col, string piece);
     Board();
@@ -62,7 +63,7 @@ string Board::get_piece(int row, char col) {
 void Board::set_piece(int row, char col, string piece) {
     col -= 'a';
     row -= 1;
-    board[row][col] = piece;
+    board[row][col] = std::move(piece);
 }
 
 #endif //PROJECT_BASE_BOARD_HPP
