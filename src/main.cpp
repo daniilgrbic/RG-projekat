@@ -90,9 +90,10 @@ int main() {
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
     glEnable(GL_CULL_FACE);
-//    glEnable(GL_BLEND);
+    glEnable(GL_BLEND);
 
-//    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthFunc(GL_LESS);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // initialize lights
     // -----------------
@@ -232,6 +233,7 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         objectShader.use();
         objectShader.setFloat("far_plane", far_plane);
+        objectShader.setVec3("cameraPos", camera.Position);
         for(unsigned int i = 0; i < pointLights.size()+spotLights.size(); i++) {
             objectShader.setInt(fmt::format("depthMaps[{}]", i), 15+(int)i);
             glActiveTexture(GL_TEXTURE15+i);
@@ -292,20 +294,25 @@ void renderScene(Shader &shader) {
     }
 
     { // render chess pieces
+        std::vector < std::tuple<float, int, char> > pieces;
         for(int row = 1; row <= 8; row++) {
-            for(char col = 'a'; col <= 'h'; col++) {
-                string piece = game.get_piece(row, col);
-                if(!piece.empty()) {
-                    glm::mat4 model = glm::mat4(1.0f);
-                    model = glm::translate(model, game.get_position(row, col));
-                    if(piece == "knight_white")
-                        model = glm::translate(model, glm::vec3(0.0, +0.16, 0.0));
-                    if(piece == "knight_black")
-                        model = glm::translate(model, glm::vec3(0.0, -0.16, 0.0));
-                    model = glm::scale(model, glm::vec3(0.183f));
-                    shader.setMat4("model", model);
-                    pieceModels[piece]->Draw(shader);
-                }
+            for (char col = 'a'; col <= 'h'; col++) {
+                pieces.emplace_back(glm::length(game.get_position(row, col) - camera.Position), row, col);
+            }
+        }
+        sort(pieces.rbegin(), pieces.rend());
+        for(auto piece : pieces) {
+            string piece_name = game.get_piece(std::get<1>(piece), std::get<2>(piece));
+            if(!piece_name.empty()) {
+                glm::mat4 model = glm::mat4(1.0f);
+                model = glm::translate(model, game.get_position(std::get<1>(piece), std::get<2>(piece)));
+                if(piece_name == "knight_white")
+                    model = glm::translate(model, glm::vec3(0.0, +0.16, 0.0));
+                if(piece_name == "knight_black")
+                    model = glm::translate(model, glm::vec3(0.0, -0.16, 0.0));
+                model = glm::scale(model, glm::vec3(0.183f));
+                shader.setMat4("model", model);
+                pieceModels[piece_name]->Draw(shader);
             }
         }
     }

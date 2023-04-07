@@ -96,7 +96,7 @@ public:
         }
         if (direction == UP)
             Position.z += velocity;
-        if (direction == DOWN)
+        if (direction == DOWN && Position.z > 0.5f)
             Position.z -= velocity;
     }
 

@@ -32,14 +32,6 @@ struct SpotLight {
     bool enabled;
 };
 
-struct DirLight {
-    vec3 direction;
-
-    vec3 ambient;
-    vec3 diffuse;
-    vec3 specular;
-};
-
 struct Material {
     sampler2D diffuse;
     sampler2D specular;
@@ -52,7 +44,6 @@ in vec3 FragPos;
 
 #define NUM_POINT_LIGHTS 3
 #define NUM_SPOTLIGHTS 2
-uniform DirLight dirLight;
 uniform PointLight pointLights[NUM_POINT_LIGHTS];
 uniform SpotLight spotLights[NUM_SPOTLIGHTS];
 
@@ -62,10 +53,11 @@ uniform vec3 viewPosition;
 uniform float far_plane;
 uniform samplerCube depthMaps[NUM_POINT_LIGHTS+NUM_SPOTLIGHTS];
 
+uniform vec3 cameraPos;
+
 vec3 globalAmbient = vec3(0.0);
 
 // function prototypes
-vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir, vec3 FragPos);
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
 vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
 float ShadowCalculation(vec3 fragPos, int depthMapId, vec3 lightPos);
@@ -89,36 +81,10 @@ void main()
         float shadow = ShadowCalculation(FragPos, NUM_POINT_LIGHTS+i, spotLights[i].position);
         combined += (1.0-shadow)*color;
     }
-    FragColor = vec4(globalAmbient+combined, 1.0);
-}
-
-vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir, vec3 FragPos)
-{
-    vec3 lightDir = normalize(-light.direction);
-    // diffuse shading
-    float diff = max(dot(normal, lightDir), 0.0);
-    // specular shading
-    vec3 reflectDir = reflect(-lightDir, normal);
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
-    // combine results
-    vec3 ambient = light.ambient * vec3(texture(material.diffuse, TexCoords));
-    vec3 diffuse = light.diffuse * diff * vec3(texture(material.diffuse, TexCoords));
-    vec3 specular = light.specular * spec * vec3(texture(material.specular, TexCoords));
-
-    globalAmbient += ambient;
-    vec3 result = diffuse + specular;
-
-    if(FragPos.y < 1.0){
-        float dist = length(FragPos);
-
-        result.x -= (result.x*pow(dist,1.75))/940.0;
-        result.y -= (result.y*pow(dist,1.75))/940.0;
-        result.z -= (result.z*pow(dist,1.75))/940.0;
-
-        if(dist>50.0) result = vec3(0.0, 0.0, 0.0);
-    }
-
-    return (result);
+    float distanceToCamera = length(FragPos-cameraPos) / 1.5;
+    if (distanceToCamera > 1.0)
+            distanceToCamera = 1.0;
+    FragColor = vec4(globalAmbient+combined, distanceToCamera);
 }
 
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
