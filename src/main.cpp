@@ -31,6 +31,8 @@ void loadPieceModels();
 
 void renderScene(Shader &shader);
 
+void renderLights(Shader &shader);
+
 // settings
 const unsigned int SCR_WIDTH = 1200;
 const unsigned int SCR_HEIGHT = 800;
@@ -44,10 +46,12 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
+bool hideLights = false;
+
 std::map<string, std::shared_ptr<Model>> pieceModels;
-std::unique_ptr<Model> board;
-std::unique_ptr<Model> cube;
-Board game;
+std::unique_ptr<Model> model_board;
+std::unique_ptr<Model> model_cube;
+Board board;
 Camera camera;
 vector <PointLight> pointLights;
 vector <SpotLight> spotLights;
@@ -66,7 +70,7 @@ int main() {
 
     // glfw window creation
     // --------------------
-    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", nullptr, nullptr);
+    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "RG projekat - Daniil Grbic", nullptr, nullptr);
     if (window == nullptr) {
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
@@ -118,10 +122,15 @@ int main() {
         "resources/shaders/object.vert",
         "resources/shaders/object.frag"
     );
+
     Shader depthShader(
-          "resources/shaders/3.2.1.point_shadows_depth.vs",
+        "resources/shaders/3.2.1.point_shadows_depth.vs",
         "resources/shaders/3.2.1.point_shadows_depth.fs",
         "resources/shaders/3.2.1.point_shadows_depth.gs"
+    );
+    Shader lightShader(
+        "resources/shaders/light.vert",
+        "resources/shaders/light.frag"
     );
 
     // configure depth map FBO
@@ -151,13 +160,13 @@ int main() {
 
     // load models
     // -----------
-    board = std::make_unique<Model>("resources/objects/stone_board/model.obj");
+    model_board = std::make_unique<Model>("resources/objects/stone_board/model.obj");
+    model_cube = std::make_unique<Model>("resources/objects/cube.obj");
     loadPieceModels();
-    cube = std::make_unique<Model>("resources/objects/cube.obj");
 
     // initialize board & camera
     // -------------------------
-    game = Board();
+    board = Board();
     camera = Camera(glm::vec3(0.0f, -9.0f, 9.0f));
 
     while (!glfwWindowShouldClose(window)) {
@@ -193,7 +202,7 @@ int main() {
             glClear(GL_DEPTH_BUFFER_BIT);
             depthShader.use();
             for (unsigned int j = 0; j < 6; ++j) {
-                depthShader.setMat4("shadowMatrices[" + std::to_string(j) + "]", shadowTransforms[j]);
+                depthShader.setMat4(fmt::format("shadowMatrices[{}]", j), shadowTransforms[j]);
             }
             depthShader.setFloat("far_plane", far_plane);
             depthShader.setVec3("lightPos", pointLights[i].position);
@@ -219,7 +228,7 @@ int main() {
             glClear(GL_DEPTH_BUFFER_BIT);
             depthShader.use();
             for (unsigned int j = 0; j < 6; ++j) {
-                depthShader.setMat4("shadowMatrices[" + std::to_string(j) + "]", shadowTransforms[j]);
+                depthShader.setMat4(fmt::format("shadowMatrices[{}]", j), shadowTransforms[j]);
             }
             depthShader.setFloat("far_plane", far_plane);
             depthShader.setVec3("lightPos", spotLights[i].position);
@@ -268,13 +277,24 @@ int main() {
         objectShader.setVec3 ("viewPosition"        , camera.Position);
         objectShader.setFloat("material.shininess"  , 32.0f);
 
-        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom),
-                                                (float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f, 100.0f);
+        glm::mat4 projection = glm::perspective(
+            glm::radians(camera.Zoom),
+            (float) SCR_WIDTH / (float) SCR_HEIGHT,
+            0.1f,
+            100.0f
+        );
         glm::mat4 view = camera.GetViewMatrix();
+
         objectShader.setMat4("projection", projection);
         objectShader.setMat4("view", view);
-
         renderScene(objectShader);
+
+        if (not hideLights) {
+            lightShader.use();
+            lightShader.setMat4("projection", projection);
+            lightShader.setMat4("view", view);
+            renderLights(lightShader);
+        }
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -290,22 +310,22 @@ void renderScene(Shader &shader) {
         model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.06f));
         model = glm::scale(model, glm::vec3(0.183f));
         shader.setMat4("model", model);
-        board->Draw(shader);
+        model_board->Draw(shader);
     }
 
     { // render chess pieces
         std::vector < std::tuple<float, int, char> > pieces;
         for(int row = 1; row <= 8; row++) {
             for (char col = 'a'; col <= 'h'; col++) {
-                pieces.emplace_back(glm::length(game.get_position(row, col) - camera.Position), row, col);
+                pieces.emplace_back(glm::length(board.get_position(row, col) - camera.Position), row, col);
             }
         }
         sort(pieces.rbegin(), pieces.rend());
         for(auto piece : pieces) {
-            string piece_name = game.get_piece(std::get<1>(piece), std::get<2>(piece));
+            string piece_name = board.get_piece(std::get<1>(piece), std::get<2>(piece));
             if(!piece_name.empty()) {
                 glm::mat4 model = glm::mat4(1.0f);
-                model = glm::translate(model, game.get_position(std::get<1>(piece), std::get<2>(piece)));
+                model = glm::translate(model, board.get_position(std::get<1>(piece), std::get<2>(piece)));
                 if(piece_name == "knight_white")
                     model = glm::translate(model, glm::vec3(0.0, +0.16, 0.0));
                 if(piece_name == "knight_black")
@@ -316,29 +336,31 @@ void renderScene(Shader &shader) {
             }
         }
     }
+}
 
-    { // render point lights
-        for(auto & pointLight : pointLights) {
-            if(!pointLight.enabled)
-                continue;
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, pointLight.position);
-            model = glm::scale(model, glm::vec3(0.1f));
-            shader.setMat4("model", model);
-            cube->Draw(shader);
-        }
+void renderLights(Shader &shader) {
+    //  render point lights
+    for(auto & pointLight : pointLights) {
+        if(!pointLight.enabled)
+            continue;
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, pointLight.position);
+        model = glm::scale(model, glm::vec3(0.07f));
+        shader.setMat4("model", model);
+        shader.setVec3("lightColor", pointLight.diffuse);
+        model_cube->Draw(shader);
     }
 
-    { // render spotlights
-        for(auto & spotLight : spotLights) {
-            if(!spotLight.enabled)
-                continue;
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, spotLight.position);
-            model = glm::scale(model, glm::vec3(0.1f));
-            shader.setMat4("model", model);
-            cube->Draw(shader);
-        }
+    //  render spotlights
+    for(auto & spotLight : spotLights) {
+        if(!spotLight.enabled)
+            continue;
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, spotLight.position);
+        model = glm::scale(model, glm::vec3(0.07f));
+        shader.setMat4("model", model);
+        shader.setVec3("lightColor", spotLight.diffuse);
+        model_cube->Draw(shader);
     }
 }
 
@@ -356,7 +378,6 @@ void loadPieceModels() {
 void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
-
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         camera.ProcessKeyboard(FORWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -396,13 +417,15 @@ void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
 void scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
     (void) window;
     (void) xoffset;
+
     camera.ProcessMouseScroll((float) yoffset);
 }
 
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
     (void) window;
-    (void) key;
     (void) scancode;
-    (void) action;
     (void) mods;
+
+    if (key == GLFW_KEY_H and action == GLFW_PRESS)
+        hideLights = not hideLights;
 }
