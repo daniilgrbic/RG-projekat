@@ -1,6 +1,6 @@
 # RG-projekat
 Project made for the Computer graphics course at the [Mathematical faculty](http://www.matf.bg.ac.rs/) (University of Belgrade)
-
+Video: [https://www.youtube.com/watch?v=xd3qVBDLLwk](https://www.youtube.com/watch?v=xd3qVBDLLwk)
 <p>
   <img src="screenshots/board.png" width="49%"  alt="board overview"/>
   <img src="screenshots/white.png" width="49%"  alt="white pieces"/>
