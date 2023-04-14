@@ -1,17 +1,21 @@
-# project_base
-Prazan projekat sa pratećim bibliotekama koje koristimo na času. 
+# RG-projekat
+Project made for the Computer graphics course at the [Mathematical faculty](http://www.matf.bg.ac.rs/) (University of Belgrade)
 
-# Uputstvo
-1. `git clone https://github.com/matf-racunarska-grafika/project_base.git`
-2. CLion -> Open -> path/to/my/project_base
-3. Main se nalazi u src/main.cpp
-4. Cpp fajlovi idu u src folder
-5. Zaglavlja (h i hpp) fajlovi idu u include
-6. Šejderi idu u folder shaders. `Vertex shader` ima ekstenziju `.vs`, `fragment shader` ima ekstenziju `.fs`
-7. ALT+SHIFT+F10 -> project_base -> run
+## Controls
+- **WASD** to move camera around
+- **LSHIFT** to lower the camera, **SPACE** to go up
+- **H** to toggle light indicators
+- **RIGHT CLICK** to (un)focus window
 
-# Credits
+## Implemented lessons
+- Group A: **anti-aliasing**, **cubemaps**
+- Group B: **soft point shadows (multiple light sources)**
 
-Chess pieces and board uploaded by user 
+## Credits
+- [LearnOpenGL](https://github.com/JoeyDeVries/LearnOpenGL) by
+    [JoeyDeVries](https://github.com/JoeyDeVries/)
+- [project_base](https://github.com/matf-racunarska-grafika/project_base/) by
+    [spaske00](https://github.com/spaske00)
+- Chess pieces and board uploaded by user 
     [printable_models](https://free3d.com/user/printable_models) at 
     [free3d.com](https://free3d.com/).

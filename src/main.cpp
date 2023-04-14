@@ -17,36 +17,42 @@
 #include <iostream>
 #include <memory>
 
-void framebuffer_size_callback(GLFWwindow *window, int width, int height);
-
-void mouse_callback(GLFWwindow *window, double xpos, double ypos);
-
-void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
-
-void processInput(GLFWwindow *window);
-
-void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
-
 void loadPieceModels();
 
 void renderScene(Shader &shader);
 
 void renderLights(Shader &shader);
 
+void framebuffer_size_callback(GLFWwindow *window, int width, int height);
+
+void window_size_callback(GLFWwindow *window, int width, int height);
+
+void mouse_callback(GLFWwindow *window, double xpos, double ypos);
+
+void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
+
+void mouse_button_callback(GLFWwindow *window, int button, int action, int mods);
+
+void processInput(GLFWwindow *window);
+
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
+
 // settings
-const unsigned int SCR_WIDTH = 1200;
-const unsigned int SCR_HEIGHT = 800;
+int SCR_WIDTH = 1200;
+int SCR_HEIGHT = 800;
 
 // camera
-float lastX = SCR_WIDTH / 2.0f;
-float lastY = SCR_HEIGHT / 2.0f;
+float lastX = (float) SCR_WIDTH / 2.0f;
+float lastY = (float) SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
 
 // timing
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
+// program state
 bool hideLights = false;
+bool hideCursor = true;
 
 std::map<string, std::shared_ptr<Model>> pieceModels;
 std::unique_ptr<Model> model_board;
@@ -78,13 +84,12 @@ int main() {
     }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetWindowSizeCallback(window, window_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetKeyCallback(window, key_callback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); // tell GLFW to capture our mouse
-
-    // draw in wireframe
-//    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress)) {
         std::cout << "Failed to initialize GLAD" << std::endl;
@@ -124,9 +129,9 @@ int main() {
     );
 
     Shader depthShader(
-        "resources/shaders/3.2.1.point_shadows_depth.vs",
-        "resources/shaders/3.2.1.point_shadows_depth.fs",
-        "resources/shaders/3.2.1.point_shadows_depth.gs"
+        "resources/shaders/point_shadows_depth.vert",
+        "resources/shaders/point_shadows_depth.frag",
+        "resources/shaders/point_shadows_depth.geom"
     );
     Shader lightShader(
         "resources/shaders/light.vert",
@@ -304,6 +309,17 @@ int main() {
     return 0;
 }
 
+void loadPieceModels() {
+    string path = "resources/objects/stone_chess/";
+    std::vector<string> piece_names = {
+            "pawn_white", "rook_white", "knight_white", "bishop_white", "king_white", "queen_white",
+            "pawn_black", "rook_black", "knight_black", "bishop_black", "king_black", "queen_black"
+    };
+    for(const auto& name : piece_names) {
+        pieceModels[name] = std::make_shared<Model>(path + name + "/modelf.obj");
+    }
+}
+
 void renderScene(Shader &shader) {
     { // render board
         glm::mat4 model = glm::mat4(1.0f);
@@ -340,7 +356,7 @@ void renderScene(Shader &shader) {
 
 void renderLights(Shader &shader) {
     //  render point lights
-    for(auto & pointLight : pointLights) {
+    for(auto &pointLight : pointLights) {
         if(!pointLight.enabled)
             continue;
         glm::mat4 model = glm::mat4(1.0f);
@@ -352,7 +368,7 @@ void renderLights(Shader &shader) {
     }
 
     //  render spotlights
-    for(auto & spotLight : spotLights) {
+    for(auto &spotLight : spotLights) {
         if(!spotLight.enabled)
             continue;
         glm::mat4 model = glm::mat4(1.0f);
@@ -361,17 +377,6 @@ void renderLights(Shader &shader) {
         shader.setMat4("model", model);
         shader.setVec3("lightColor", spotLight.diffuse);
         model_cube->Draw(shader);
-    }
-}
-
-void loadPieceModels() {
-    string path = "resources/objects/stone_chess/";
-    std::vector<string> piece_names = {
-            "pawn_white", "rook_white", "knight_white", "bishop_white", "king_white", "queen_white",
-            "pawn_black", "rook_black", "knight_black", "bishop_black", "king_black", "queen_black"
-    };
-    for(const auto& name : piece_names) {
-        pieceModels[name] = std::make_shared<Model>(path + name + "/modelf.obj");
     }
 }
 
@@ -397,8 +402,20 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
+void window_size_callback(GLFWwindow *window, int width, int height) {
+    (void) window;
+    SCR_WIDTH = width;
+    SCR_HEIGHT = height;
+}
+
 void mouse_callback(GLFWwindow *window, double xpos, double ypos) {
     (void) window;
+
+    if (not hideCursor) {
+        firstMouse = true;
+        return;
+    }
+
     if (firstMouse) {
         lastX = (float) xpos;
         lastY = (float) ypos;
@@ -419,6 +436,15 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
     (void) xoffset;
 
     camera.ProcessMouseScroll((float) yoffset);
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
+        hideCursor = not hideCursor;
+        if(hideCursor) glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        else glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    }
 }
 
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
