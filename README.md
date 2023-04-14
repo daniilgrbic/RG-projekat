@@ -1,5 +1,5 @@
 # RG-projekat
-Project made for the Computer graphics course at the [Mathematical faculty](http://www.matf.bg.ac.rs/) (University of Belgrade)
+Project made for the Computer graphics course at the [Mathematical faculty](http://www.matf.bg.ac.rs/) (University of Belgrade) <br>
 Video: [https://www.youtube.com/watch?v=xd3qVBDLLwk](https://www.youtube.com/watch?v=xd3qVBDLLwk)
 <p>
   <img src="screenshots/board.png" width="49%"  alt="board overview"/>
