@@ -5,6 +5,7 @@ Project made for the Computer graphics course at the [Mathematical faculty](http
 - **WASD** to move camera around
 - **LSHIFT** to lower the camera, **SPACE** to go up
 - **H** to toggle light indicators
+- **F** to show FPS
 - **RIGHT CLICK** to (un)focus window
 
 ## Implemented lessons

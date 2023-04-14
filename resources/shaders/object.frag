@@ -42,8 +42,8 @@ in vec2 TexCoords;
 in vec3 Normal;
 in vec3 FragPos;
 
-#define NUM_POINT_LIGHTS 3
-#define NUM_SPOTLIGHTS 2
+#define NUM_POINT_LIGHTS 1
+#define NUM_SPOTLIGHTS 3
 uniform PointLight pointLights[NUM_POINT_LIGHTS];
 uniform SpotLight spotLights[NUM_SPOTLIGHTS];
 

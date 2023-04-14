@@ -6,6 +6,10 @@
 
 #include <fmt/core.h>
 
+#include <iostream>
+#include <memory>
+#include <numeric>
+
 #include <learnopengl/filesystem.h>
 #include <learnopengl/shader.h>
 #include <learnopengl/camera.h>
@@ -13,9 +17,6 @@
 
 #include <board.hpp>
 #include <lights.hpp>
-
-#include <iostream>
-#include <memory>
 
 void loadPieceModels();
 
@@ -53,6 +54,8 @@ float lastFrame = 0.0f;
 // program state
 bool hideLights = false;
 bool hideCursor = true;
+bool printFps = false;
+vector <float> prev_fps(10, 0.0f);
 
 std::map<string, std::shared_ptr<Model>> pieceModels;
 std::unique_ptr<Model> model_board;
@@ -106,20 +109,31 @@ int main() {
 
     // initialize lights
     // -----------------
-    pointLights = vector<PointLight>(3, PointLight());
-    pointLights[0].position = glm::vec3(+4.0, +4.0, 3.0);
-    pointLights[1].position = glm::vec3(-4.0, +4.0, 2.0);
-    pointLights[2].position = glm::vec3(4.0, +0.0, 4.0);
-    pointLights[2].enabled = true;
+    pointLights = vector<PointLight>(1, PointLight());
+    pointLights[0].position = glm::vec3(0.0, 0.0, 10.0);
+    pointLights[0].set_light(glm::vec3(2, 1, 2));
+    pointLights[0].ambient = glm::vec3(1);
+    pointLights[0].enabled = true;
 
-    spotLights = vector<SpotLight>(2, SpotLight());
-    spotLights[0].position = glm::vec3(+0.0, +2.0, 4.0);
-    spotLights[0].direction = normalize(glm::vec3(+0.0, -1.3, -1.0));
+    spotLights = vector<SpotLight>(3, SpotLight());
+    spotLights[0].position = glm::vec3(5, -6, 5);
+    spotLights[0].direction = normalize(glm::vec3(0, 1, 0) - spotLights[0].position);
+    spotLights[0].cutOff = glm::cos(glm::radians(18.0f));
+    spotLights[0].outerCutOff = glm::cos(glm::radians(21.0f));
+    spotLights[0].set_light(glm::vec3(16, 0, 0));
     spotLights[0].enabled = true;
-    spotLights[1].position = glm::vec3(-8.0, -4.0, 4.0);
-    spotLights[1].direction = normalize(glm::vec3(+2.0, +2.0, -1.0));
-    spotLights[1].diffuse *= 5.0;
+    spotLights[1].position = glm::vec3(-8, -3, 5);
+    spotLights[1].direction = normalize(glm::vec3(-1, 0, 0) - spotLights[1].position);
+    spotLights[1].cutOff = glm::cos(glm::radians(19.0f));
+    spotLights[1].outerCutOff = glm::cos(glm::radians(22.0f));
+    spotLights[1].set_light(glm::vec3(0, 0, 16));
     spotLights[1].enabled = true;
+    spotLights[2].position = glm::vec3(1, 9, 5);
+    spotLights[2].direction = normalize(glm::vec3(0, -2, 0) - spotLights[2].position);
+    spotLights[2].cutOff = glm::cos(glm::radians(17.0f));
+    spotLights[2].outerCutOff = glm::cos(glm::radians(20.0f));
+    spotLights[2].set_light(glm::vec3(0, 8, 0));
+    spotLights[2].enabled = true;
 
     // build and compile shaders
     // -------------------------
@@ -178,6 +192,14 @@ int main() {
         auto currentFrame = (float) glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
+
+        prev_fps.erase(prev_fps.begin());
+        prev_fps.push_back(1.0f / deltaTime);
+        float avg_fps = std::accumulate(prev_fps.begin(), prev_fps.end(), 0.0f) / (float) prev_fps.size();
+        if (printFps)
+            glfwSetWindowTitle(window,fmt::format("RG projekat - Daniil Grbic - {:.2f} FPS", avg_fps).c_str());
+        else
+            glfwSetWindowTitle(window, "RG projekat - Daniil Grbic");
 
         processInput(window);
 
@@ -440,6 +462,8 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
+    (void) mods;
+
     if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
         hideCursor = not hideCursor;
         if(hideCursor) glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -454,4 +478,6 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 
     if (key == GLFW_KEY_H and action == GLFW_PRESS)
         hideLights = not hideLights;
+    if (key == GLFW_KEY_F and action == GLFW_PRESS)
+        printFps = not printFps;
 }
