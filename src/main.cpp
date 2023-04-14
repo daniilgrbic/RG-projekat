@@ -55,7 +55,7 @@ float lastFrame = 0.0f;
 bool hideLights = false;
 bool hideCursor = true;
 bool printFps = false;
-vector <float> prev_fps(10, 0.0f);
+vector <float> prev_fps(20, 0.0f);
 
 std::map<string, std::shared_ptr<Model>> pieceModels;
 std::unique_ptr<Model> model_board;
@@ -203,7 +203,7 @@ int main() {
 
         processInput(window);
 
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClearColor(0.02f, 0.0f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         float near_plane = 1.0f;

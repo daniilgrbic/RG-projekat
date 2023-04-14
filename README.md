@@ -1,6 +1,11 @@
 # RG-projekat
 Project made for the Computer graphics course at the [Mathematical faculty](http://www.matf.bg.ac.rs/) (University of Belgrade)
 
+<p>
+  <img src="screenshots/board.png" width="49%"  alt="board overview"/>
+  <img src="screenshots/white.png" width="49%"  alt="white pieces"/>
+</p>
+
 ## Controls
 - **WASD** to move camera around
 - **LSHIFT** to lower the camera, **SPACE** to go up
