@@ -18,10 +18,11 @@ Project made for the Computer graphics course at the [Mathematical faculty](http
   - `./RG-projekat`
 
 ### Controls
-- **WASD** to move camera around
-- **LSHIFT** to lower the camera, **SPACE** to go up
-- **H** to toggle light indicators
-- **F** to show FPS
+- Hold **WASD** to move camera around
+- Hold **LSHIFT** to lower the camera, **SPACE** to go up
+- Hold **LEFT CONTROL** to move slowly
+- Press **H** to (un)hide lights
+- Press **F** to show FPS
 - **RIGHT CLICK** to (un)focus window
 
 ### Implemented lessons
