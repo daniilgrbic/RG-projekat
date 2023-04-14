@@ -26,7 +26,7 @@ for piece in pieces:
     zM = max(zs)
 
     print(f'Writing {piece}')
-    with open(f'{piece}/model.obj', 'r') as source:
+    with open(f'{piece}/model_small.obj', 'r') as source:
         with open(f'{piece}/modelf.obj', 'w') as destination:
             for line in source.readlines():
                 try:
@@ -35,9 +35,8 @@ for piece in pieces:
                         x, y, z = map(float, items)
                         x -= (xm+xM)/2
                         y -= (ym+yM)/2
-                        #z -= (zm+zM)/2
                         z -= zm
-                        destination.write(f'v {x} {y} {z}\n')
+                        destination.write(f'v {x:.2f} {y:.2f} {z:.2f}\n')
                     else:
                         destination.write(line) 
                 except ValueError:

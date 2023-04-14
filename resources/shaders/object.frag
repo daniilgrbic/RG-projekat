@@ -149,7 +149,7 @@ float ShadowCalculation(vec3 fragPos, int depthMapId, vec3 lightPos)
     float shadow = 0.0;
     float bias = 0.05;
     float samples = 4.0;
-    float offset = 0.1;
+    float offset = 0.25;
     for(float x = -offset; x < offset; x += offset / (samples * 0.5)) {
      for(float y = -offset; y < offset; y += offset / (samples * 0.5)) {
          for(float z = -offset; z < offset; z += offset / (samples * 0.5)) {
